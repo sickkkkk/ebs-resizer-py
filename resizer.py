@@ -22,7 +22,6 @@ def get_ec2_info(nametag):
         print(f"Http code: {error.response['ResponseMetadata']['HTTPStatusCode']}")
         sys.exit()
         
-    # print(json.dumps(response,indent=4, default=str)) # debug
     ec2info = dict()
     try:
         ec2info["ec2_instance_id"]=response["Reservations"][0]["Instances"][0]["InstanceId"]
@@ -46,7 +45,6 @@ def get_ec2_info(nametag):
         print(f"Request ID: {error.response['ResponseMetadata']['RequestId']}")
         print(f"Http code: {error.response['ResponseMetadata']['HTTPStatusCode']}")
         sys.exit()
-    # print(json.dumps(response,indent=4, default=str)) #debug
     ec2info["ec2_root_volume_size"]=str(response["Volumes"][0]['Size'])
     return ec2info
 def get_volume_modification_state(volume_id):
@@ -68,7 +66,6 @@ def resize_ec2_root_volume(volume_id, new_size):
         print(f"Request ID: {error.response['ResponseMetadata']['RequestId']}")
         print(f"Http code: {error.response['ResponseMetadata']['HTTPStatusCode']}")
         sys.exit()
-    # print(json.dumps(response,indent=4, default=str)) # debug
     return True
 def push_ec2_ssh_payload(kp_name, ec2_public_ip, payload_cmd, num_retries):
     if num_retries >= 10:
