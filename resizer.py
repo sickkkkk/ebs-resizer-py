@@ -150,8 +150,8 @@ try:
 except Exception as error:
     print(error)
 # create a summary for user
-for k,v in ec2_params.items():
-    print("\t"+ k +": "+ v)
+for key,value in ec2_params.items():
+    print("\t"+ key +": "+ value)
 print(f"You're about to add {added_space} gigs to instance named '{instance_name}'")
 input("Press any key to continue...\n")
 
