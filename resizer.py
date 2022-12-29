@@ -1,35 +1,37 @@
+"""A basic ebs-resizer tool"""
 import os
 import sys
 import argparse
+import time
 import boto3
 import botocore
-import json
 import paramiko
-import time
+
 
 def get_ec2_info(nametag):
-    """ Retrieve values from describe_instances method in ec2 client library. The result is dictionary"""
+    """
+    Retrieve values from describe_instances method in ec2 client library.
+    The result is dictionary
+    """
     try:
         response = ec2.describe_instances(
-            Filters=[
-            {'Name': 'tag:Name',
-            'Values': [f'{nametag}',
+            Filters=[{'Name': 'tag:Name','Values': [f'{nametag}',
             ]},]
         )
-    except botocore.exceptions.ClientError as error:
-        print(f"Error Message: {error.response['Error']['Message']}")
-        print(f"Request ID: {error.response['ResponseMetadata']['RequestId']}")
-        print(f"Http code: {error.response['ResponseMetadata']['HTTPStatusCode']}")
+    except botocore.exceptions.ClientError as client_error:
+        print(f"Error Message: {client_error.response['Error']['Message']}")
+        print(f"Request ID: {client_error.response['ResponseMetadata']['RequestId']}")
+        print(f"Http code: {client_error.response['ResponseMetadata']['HTTPStatusCode']}")
         sys.exit()
-        
     ec2info = dict()
     try:
-        ec2info["ec2_instance_id"]=response["Reservations"][0]["Instances"][0]["InstanceId"]
-        ec2info["ec2_instance_status"]=response["Reservations"][0]["Instances"][0]['State']['Name']
-        ec2info["ec2_root_volumeid"]=response["Reservations"][0]["Instances"][0]["BlockDeviceMappings"][0]['Ebs']['VolumeId']
-        ec2info["ec2_root_volume_status"]=response["Reservations"][0]["Instances"][0]["BlockDeviceMappings"][0]['Ebs']['Status']
-        ec2info["ec2_public_ip"]=response["Reservations"][0]["Instances"][0]["PublicIpAddress"]
-        ec2info["ec2_kp_filename"]=response["Reservations"][0]["Instances"][0]["KeyName"]
+        ec2_instance = response["Reservations"][0]["Instances"][0]
+        ec2info["ec2_instance_id"]=ec2_instance["InstanceId"]
+        ec2info["ec2_instance_status"]=ec2_instance['State']['Name']
+        ec2info["ec2_root_volumeid"]=ec2_instance["BlockDeviceMappings"][0]['Ebs']['VolumeId']
+        ec2info["ec2_root_volume_status"]=ec2_instance["BlockDeviceMappings"][0]['Ebs']['Status']
+        ec2info["ec2_public_ip"]=ec2_instance["PublicIpAddress"]
+        ec2info["ec2_kp_filename"]=ec2_instance["KeyName"]
     except IndexError:
         sys.exit("Unable to retrieve data. Possibly bad instance name")
     source_root_volume_id=ec2info["ec2_root_volumeid"]
@@ -40,55 +42,63 @@ def get_ec2_info(nametag):
             'Values': [f'{source_root_volume_id}',
             ]},]
         )
-    except botocore.exceptions.ClientError as error:
-        print(f"Error Message: {error.response['Error']['Message']}")
-        print(f"Request ID: {error.response['ResponseMetadata']['RequestId']}")
-        print(f"Http code: {error.response['ResponseMetadata']['HTTPStatusCode']}")
+    except botocore.exceptions.ClientError as client_error:
+        print(f"Error Message: {client_error.response['Error']['Message']}")
+        print(f"Request ID: {client_error.response['ResponseMetadata']['RequestId']}")
+        print(f"Http code: {client_error.response['ResponseMetadata']['HTTPStatusCode']}")
         sys.exit()
     ec2info["ec2_root_volume_size"]=str(response["Volumes"][0]['Size'])
     return ec2info
+
 def get_volume_modification_state(volume_id):
+    """querry ec2 client for volume modification task"""
     try:
+
         response = ec2.describe_volumes_modifications(
         VolumeIds=[volume_id]
 )
-    except botocore.exceptions.ClientError as error:
-        print(f"Error Message: {error.response['Error']['Message']}")
-        print(f"Request ID: {error.response['ResponseMetadata']['RequestId']}")
-        print(f"Http code: {error.response['ResponseMetadata']['HTTPStatusCode']}")
+    except botocore.exceptions.ClientError as client_error:
+        print(f"Error Message: {client_error.response['Error']['Message']}")
+        print(f"Request ID: {client_error.response['ResponseMetadata']['RequestId']}")
+        print(f"Http code: {client_error.response['ResponseMetadata']['HTTPStatusCode']}")
         sys.exit()
     return response['VolumesModifications'][0]['ModificationState']
 def resize_ec2_root_volume(volume_id, new_size):
+    """querry ec2 client to do actual resizing of root volume"""
     try:
-        response = ec2.modify_volume(VolumeId=volume_id, Size=new_size, DryRun=False)
-    except botocore.exceptions.ClientError as error:
-        print(f"Error Message: {error.response['Error']['Message']}")
-        print(f"Request ID: {error.response['ResponseMetadata']['RequestId']}")
-        print(f"Http code: {error.response['ResponseMetadata']['HTTPStatusCode']}")
+        ec2.modify_volume(VolumeId=volume_id, Size=new_size, DryRun=False)
+    except botocore.exceptions.ClientError as client_error:
+        print(f"Error Message: {client_error.response['Error']['Message']}")
+        print(f"Request ID: {client_error.response['ResponseMetadata']['RequestId']}")
+        print(f"Http code: {client_error.response['ResponseMetadata']['HTTPStatusCode']}")
         sys.exit()
     return True
 def push_ec2_ssh_payload(kp_name, ec2_public_ip, payload_cmd, num_retries):
+    """
+    for development sake assuming we store keytab localy near .py file itself
+    probably a better solution would be to put contents of keypair file on to
+    a parameter or secrets storage inside AWS itself
+    and dump it to a temporary file during script execution -
+    but it requires more complex setup and debugging
+    looks like a good way of improvement a solution to a prodcution ready state (TBD)"""
     if num_retries >= 10:
         return False
     timeout_span=5
     try:
-        # for development sake assuming we store keytab localy near .py file itself
-        # probably a better solution would be to put contents of keypair file on to a parameter or secrets storage inside AWS itself
-        # and dump it to a temporary file during script execution - but it requires more complex setup and debugging
-        # looks like a good way of improvement a solution to a prodcution ready state (TBD)
-        keytab_file = paramiko.RSAKey.from_private_key_file(f"./{kp_name}"+".pem") 
-    except Exception as e:
-        sys.exit(e)
+        keytab_file = paramiko.RSAKey.from_private_key_file(f"./{kp_name}"+".pem")
+    except Exception as keytab_error:
+        sys.exit(keytab_error)
     try:
         num_retries+=1
         print(f"SSH on to {ec2_public_ip}")
         ssh.connect(hostname=ec2_public_ip, username='ubuntu', pkey=keytab_file)
         stdin, stdout, stderr=ssh.exec_command(bytes(payload_cmd, "utf-8")) # bytes object required
+        print("stdin:\n", (stdin.read()).decode(encoding="UTF-8")) # get a fancy output
         print("stdout:\n", (stdout.read()).decode(encoding="UTF-8")) # get a fancy output
         print('stderr:\n', (stderr.read()).decode(encoding="UTF-8")) # get a fancy output
         return True
-    except Exception as e:
-        print(e)
+    except Exception as ssh_client_error:
+        print(ssh_client_error)
         time.sleep(timeout_span)
         print(f"RE-trying to SSH on to {ec2_public_ip}")
         push_ec2_ssh_payload(kp_name, ec2_public_ip, payload_cmd, num_retries)
@@ -108,7 +118,7 @@ instance_name=config['name']
 added_space=config['add']
 
 # add some argument checks
-if (added_space < 1):
+if added_space < 1:
     sys.exit("You cannot add less than 1 gigs to a volume. Exiting...")
 # init authentication variables
 try:
@@ -135,20 +145,21 @@ root_volume_id=ec2_params["ec2_root_volumeid"]
 root_volume_initial_size=ec2_params["ec2_root_volume_size"]
 new_root_volume_size=int(root_volume_initial_size)+int(added_space)
 try:
-    payload_cmds=[line.strip() for line in open("ssh_payload.txt","r")] # allocate remote commands in a string set
-except Exception as e:
-    print(e)
+    # allocate subset of commands
+    payload_cmds=[line.strip() for line in open("ssh_payload.txt","rb")]
+except Exception as error:
+    print(error)
 # create a summary for user
 for k,v in ec2_params.items():
     print("\t"+ k +": "+ v)
 print(f"You're about to add {added_space} gigs to instance named '{instance_name}'")
 input("Press any key to continue...\n")
 
-# proceed to resizing 
+# proceed to resizing
 resize_ec2_root_volume(root_volume_id, new_root_volume_size)
 while True:
     state = get_volume_modification_state(root_volume_id)
-    if state == "completed" or state == None:
+    if state == "completed" or state is None:
         break
     elif state == "failed":
         sys.exit('Failed to modify volume size')
