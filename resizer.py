@@ -164,7 +164,7 @@ while True:
     elif state == "failed":
         sys.exit('Failed to modify volume size')
     else:
-        print("Waiting for volume resize task to complete")
+        print("Waiting for volume resize task to complete...")
         time.sleep(60)
 print("Done and done! Proceed to fs resize task")
 for cmd in payload_cmds:
