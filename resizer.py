@@ -15,8 +15,11 @@ def get_ec2_info(nametag):
     """
     try:
         response = ec2.describe_instances(
-            Filters=[{'Name': 'tag:Name','Values': [f'{nametag}',
-            ]},]
+            Filters=[
+                {'Name': 'tag:Name',
+                'Values': f'{nametag}'
+                }
+            ]
         )
     except botocore.exceptions.ClientError as client_error:
         print(f"Error Message: {client_error.response['Error']['Message']}")
@@ -39,8 +42,9 @@ def get_ec2_info(nametag):
         response = ec2.describe_volumes(
             Filters=[
             {'Name': 'volume-id',
-            'Values': [f'{source_root_volume_id}',
-            ]},]
+            'Values': f'{source_root_volume_id}'
+            }
+            ]
         )
     except botocore.exceptions.ClientError as client_error:
         print(f"Error Message: {client_error.response['Error']['Message']}")
