@@ -36,7 +36,7 @@ def get_ec2_info(nametag):
         ec2info["ec2_public_ip"]=ec2_instance["PublicIpAddress"]
         ec2info["ec2_kp_filename"]=ec2_instance["KeyName"]
     except IndexError:
-        sys.exit("Unable to retrieve data. Possibly bad instance name")
+        sys.exit("Unable to retrieve data. Check instance name")
     source_root_volume_id=ec2info["ec2_root_volumeid"]
     try:
         response = ec2.describe_volumes(
